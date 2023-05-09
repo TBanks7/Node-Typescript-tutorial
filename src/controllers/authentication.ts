@@ -1,10 +1,46 @@
 import express from 'express';
-import { getUserByEmail, createUser } from 'db/users';
-import { random, authentication } from 'helpers';
+import { getUserByEmail, createUser } from '../db/users';
+import { random, authentication } from '../helpers';
+
+export const login = async (req: express.Request, res: express.Response) => {
+   const { email, password } = req.body
+
+   try {
+    if (!email || !password) {
+        return res.sendStatus(400);
+    }
+
+    const user = await getUserByEmail(email).select('+authentication.salt +authentication.password');
+
+    if (!user) {
+        return res.sendStatus(400);
+    }
+
+    const expectedHash = authentication(user.authentication.salt, password);
+    if (user.authentication.password !== expectedHash){
+        return res.sendStatus(403)
+    }
+
+    const salt = random();
+    user.authentication.sessionToken = authentication(salt, user.id.toString());
+
+    await user.save();
+
+    res.cookie('TEMITOPE-AUTH', user.authentication.sessionToken, { domain: 'localhost', path: '/' })
+
+    return res.status(200).json(user)
+    
+   } catch (error) {
+    console.log(error);
+    res.sendStatus(400);
+   }
+}
 
 export const register = async (req: express.Request, res: express.Response) => {
+    console.log(req.body);
     try {
         const {email, password, username} = req.body;
+        console.log(req.body);
 
         if (!email || !password || !username) {
             return res.sendStatus(400);
